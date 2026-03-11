@@ -2,9 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import MessageBubble from "./MessageBubble";
-import { saveChats } from "@/app/lib/chatStorage";
 
-export default function ChatWindow({ chats, setChats, activeChat, setActiveChat }: any) {
+export default function ChatWindow({
+  chats,
+  setChats,
+  activeChat,
+  setActiveChat,
+}: any) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -36,7 +40,8 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
     if (file.type.startsWith("image/")) return "IMG";
     if (file.type === "application/pdf") return "PDF";
     if (file.type.includes("word")) return "DOC";
-    if (file.type.includes("excel") || file.type.includes("sheet")) return "XLS";
+    if (file.type.includes("excel") || file.type.includes("sheet"))
+      return "XLS";
     if (file.type.includes("text")) return "TXT";
     return "FILE";
   };
@@ -45,7 +50,8 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
     if (file.type.startsWith("image/")) return "#0091DA";
     if (file.type === "application/pdf") return "#e53e3e";
     if (file.type.includes("word")) return "#3b82f6";
-    if (file.type.includes("excel") || file.type.includes("sheet")) return "#00B2A9";
+    if (file.type.includes("excel") || file.type.includes("sheet"))
+      return "#00B2A9";
     return "rgba(255,255,255,0.4)";
   };
 
@@ -55,20 +61,24 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
     return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
   };
 
-  const handleNewChat = () => {
-    const newChat = {
-      id: Date.now(),
-      title: `Session ${chats.length + 1}`,
-      messages: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const updated = [newChat, ...chats];
-    setChats(updated);
-    saveChats(updated);
-    setActiveChat(0);
-    setInput("");
-    setAttachments([]);
+  const handleNewChat = async () => {
+    try {
+      const res = await fetch("/api/chats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Session ${chats.length + 1}`,
+          messages: [],
+        }),
+      });
+      const newChat = await res.json();
+      setChats([newChat, ...chats]);
+      setActiveChat(0);
+      setInput("");
+      setAttachments([]);
+    } catch (err) {
+      console.error("Failed to create chat:", err);
+    }
   };
 
   const sendMessage = () => {
@@ -100,8 +110,15 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
 
     // Update timestamp and persist to localStorage
     updatedChats[activeChat].updatedAt = now;
-    setChats(updatedChats);
-    saveChats(updatedChats);
+    setChats([...updatedChats]);
+    const chat = updatedChats[activeChat];
+    if (chat._id) {
+      fetch(`/api/chats/${chat._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: chat.messages, title: chat.title }),
+      }).catch(console.error);
+    }
 
     setInput("");
     setAttachments([]);
@@ -233,7 +250,11 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
         .cw-char-count { font-size:9px;letter-spacing:1px;color:rgba(255,255,255,0.1); }
       `}</style>
 
-      <div className="cw-root" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
+      <div
+        className="cw-root"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
+      >
         <div className="cw-grid" />
         <div className="cw-orb cw-orb-1" />
         <div className="cw-orb cw-orb-2" />
@@ -249,12 +270,19 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
             </div>
           </div>
           <div className="cw-header-right">
-            <span className="cw-msg-count">{messages.length} MSG{messages.length !== 1 ? "S" : ""}</span>
+            <span className="cw-msg-count">
+              {messages.length} MSG{messages.length !== 1 ? "S" : ""}
+            </span>
 
             {/* ── New Chat button ── */}
             <button className="cw-new-btn" onClick={handleNewChat}>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <path d="M5 1v8M1 5h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <path
+                  d="M5 1v8M1 5h8"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
               </svg>
               New Chat
             </button>
@@ -272,7 +300,9 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
             <div className="cw-empty">
               <div className="cw-empty-icon">AI</div>
               <div className="cw-empty-title">New Session</div>
-              <div className="cw-empty-text">Type a message or attach a file to begin</div>
+              <div className="cw-empty-text">
+                Type a message or attach a file to begin
+              </div>
             </div>
           ) : (
             <>
@@ -285,34 +315,60 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
                 <div key={i}>
                   <MessageBubble message={msg} />
                   {msg.attachments?.length > 0 && (
-                    <div style={{
-                      display: "flex",
-                      justifyContent: msg.sender === "user" ? "flex-end" : "flex-start",
-                      paddingLeft: msg.sender === "user" ? 0 : "36px",
-                      paddingRight: msg.sender === "user" ? "36px" : 0,
-                      marginTop: "-4px",
-                      marginBottom: "8px",
-                    }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent:
+                          msg.sender === "user" ? "flex-end" : "flex-start",
+                        paddingLeft: msg.sender === "user" ? 0 : "36px",
+                        paddingRight: msg.sender === "user" ? "36px" : 0,
+                        marginTop: "-4px",
+                        marginBottom: "8px",
+                      }}
+                    >
                       <div className="msg-attachments">
                         {msg.attachments.map((att: any, ai: number) =>
                           att.preview ? (
                             <div key={ai} className="msg-attach-item">
-                              <img src={att.preview} alt={att.name} className="msg-attach-img" />
-                              <div className="msg-attach-img-overlay">{att.name}</div>
+                              <img
+                                src={att.preview}
+                                alt={att.name}
+                                className="msg-attach-img"
+                              />
+                              <div className="msg-attach-img-overlay">
+                                {att.name}
+                              </div>
                             </div>
                           ) : (
                             <div key={ai} className="msg-attach-item">
                               <div className="msg-attach-file">
-                                <div className="msg-attach-icon" style={{ background: att.color + "33", border: `1px solid ${att.color}55` }}>
-                                  <span style={{ color: att.color, fontSize: "9px" }}>{att.icon}</span>
+                                <div
+                                  className="msg-attach-icon"
+                                  style={{
+                                    background: att.color + "33",
+                                    border: `1px solid ${att.color}55`,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      color: att.color,
+                                      fontSize: "9px",
+                                    }}
+                                  >
+                                    {att.icon}
+                                  </span>
                                 </div>
                                 <div className="msg-attach-info">
-                                  <div className="msg-attach-name">{att.name}</div>
-                                  <div className="msg-attach-size">{(att.size / 1024).toFixed(1)} KB</div>
+                                  <div className="msg-attach-name">
+                                    {att.name}
+                                  </div>
+                                  <div className="msg-attach-size">
+                                    {(att.size / 1024).toFixed(1)} KB
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          )
+                          ),
                         )}
                       </div>
                     </div>
@@ -331,19 +387,36 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
               {attachments.map((file, i) => (
                 <div key={i} className="cw-stage-item">
                   {file.type.startsWith("image/") ? (
-                    <img src={URL.createObjectURL(file)} alt={file.name} className="cw-stage-thumb" />
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={file.name}
+                      className="cw-stage-thumb"
+                    />
                   ) : (
-                    <div className="cw-stage-icon" style={{ background: getFileColor(file) + "33" }}>
-                      <span style={{ color: getFileColor(file) }}>{getFileIcon(file)}</span>
+                    <div
+                      className="cw-stage-icon"
+                      style={{ background: getFileColor(file) + "33" }}
+                    >
+                      <span style={{ color: getFileColor(file) }}>
+                        {getFileIcon(file)}
+                      </span>
                     </div>
                   )}
                   <div>
                     <div className="cw-stage-name">{file.name}</div>
                     <div className="cw-stage-size">{formatSize(file.size)}</div>
                   </div>
-                  <button className="cw-stage-remove" onClick={() => removeAttachment(i)}>
+                  <button
+                    className="cw-stage-remove"
+                    onClick={() => removeAttachment(i)}
+                  >
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                      <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      <path
+                        d="M1 1l8 8M9 1L1 9"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
                     </svg>
                   </button>
                 </div>
@@ -358,17 +431,34 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
               aria-label="Attach files"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M13.5 9.5v2a2 2 0 01-2 2h-7a2 2 0 01-2-2v-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                <path d="M8 1v8M5.5 3.5L8 1l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                <path
+                  d="M13.5 9.5v2a2 2 0 01-2 2h-7a2 2 0 01-2-2v-2"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M8 1v8M5.5 3.5L8 1l2.5 2.5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
-              {attachments.length > 0 && <span className="cw-upload-count">{attachments.length}</span>}
+              {attachments.length > 0 && (
+                <span className="cw-upload-count">{attachments.length}</span>
+              )}
             </button>
 
             <textarea
               ref={textareaRef}
               className="cw-textarea"
               rows={1}
-              placeholder={attachments.length > 0 ? "Add a message… (Enter to send)" : "Type a message… (Enter to send)"}
+              placeholder={
+                attachments.length > 0
+                  ? "Add a message… (Enter to send)"
+                  : "Type a message… (Enter to send)"
+              }
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
@@ -381,7 +471,13 @@ export default function ChatWindow({ chats, setChats, activeChat, setActiveChat 
               aria-label="Send message"
             >
               <svg className="send-arrow" viewBox="0 0 16 16" fill="none">
-                <path d="M2 8h12M9 3l5 5-5 5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path
+                  d="M2 8h12M9 3l5 5-5 5"
+                  stroke="#fff"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </button>
           </div>

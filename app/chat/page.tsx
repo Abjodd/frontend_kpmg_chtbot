@@ -4,34 +4,49 @@ import { useState, useEffect } from "react";
 import Navbar from "@/app/components/navbar";
 import Sidebar from "@/app/components/Sidebar";
 import ChatWindow from "@/app/components/ChatWindow";
-import { loadChats, saveChats } from "@/app/lib/chatStorage";
 
 export default function ChatPage() {
-  // Start with empty array — avoids SSR/client mismatch
   const [chats, setChats] = useState<any[]>([]);
   const [activeChat, setActiveChat] = useState(0);
   const [ready, setReady] = useState(false);
 
-  // Load from localStorage only on client after mount
+  // Load chats from MongoDB on mount
   useEffect(() => {
-    const loaded = loadChats();
-    if (loaded.length === 0) {
-      const first = {
-        id: Date.now(),
-        title: "Session 1",
-        messages: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      saveChats([first]);
-      setChats([first]);
-    } else {
-      setChats(loaded);
+    async function init() {
+      try {
+        const res = await fetch("/api/chats");
+        const loaded = await res.json();
+
+        if (!loaded.length) {
+          const createRes = await fetch("/api/chats", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: "Session 1", messages: [] }),
+          });
+          const first = await createRes.json();
+          setChats([first]);
+        } else {
+          setChats(loaded);
+        }
+      } catch (err) {
+        console.error("Failed to load chats:", err);
+        setChats([]);
+      } finally {
+        setReady(true);
+      }
     }
-    setReady(true);
+    init();
   }, []);
 
-  // Don't render sidebar/chat until client data is loaded
+  // Plain setChats — Sidebar and ChatWindow handle their own API calls
+  // This just keeps local UI state in sync
+  const handleSetChats = (action: any) => {
+    setChats((prev) => {
+      const next = typeof action === "function" ? action(prev) : action;
+      return next;
+    });
+  };
+
   if (!ready) return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Navbar />
@@ -44,13 +59,13 @@ export default function ChatPage() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           chats={chats}
-          setChats={setChats}
+          setChats={handleSetChats}
           activeChat={activeChat}
           selectChat={setActiveChat}
         />
         <ChatWindow
           chats={chats}
-          setChats={setChats}
+          setChats={handleSetChats}
           activeChat={activeChat}
           setActiveChat={setActiveChat}
         />
