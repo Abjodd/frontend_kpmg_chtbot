@@ -1,21 +1,29 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/app/lib/mongodb";
+import { ObjectId } from "mongodb";
 
 const DB = "kpmg_chatbot";
 const COLLECTION = "chats";
 
-// GET /api/chats — load all chats
-export async function GET() {
+// GET /api/chats — load chats for the logged-in user only
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get("userId");
+
+    if (!userId) {
+      return NextResponse.json({ error: "userId required" }, { status: 400 });
+    }
+
     const client = await clientPromise;
     const db = client.db(DB);
+
     const chats = await db
       .collection(COLLECTION)
-      .find({})
+      .find({ userId })
       .sort({ updatedAt: -1 })
       .toArray();
 
-    // Always return _id as a plain string so frontend can use it directly
     const formatted = chats.map(({ _id, ...rest }) => ({
       _id: _id.toString(),
       ...rest,
@@ -28,14 +36,19 @@ export async function GET() {
   }
 }
 
-// POST /api/chats — create a new chat
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+
+    if (!body.userId) {
+      return NextResponse.json({ error: "userId required" }, { status: 400 });
+    }
+
     const client = await clientPromise;
     const db = client.db(DB);
 
     const newChat = {
+      userId: body.userId,          
       title: body.title ?? "New Conversation",
       messages: body.messages ?? [],
       createdAt: new Date(),
@@ -44,7 +57,6 @@ export async function POST(req: Request) {
 
     const result = await db.collection(COLLECTION).insertOne(newChat);
 
-    // Return _id as plain string
     return NextResponse.json({
       _id: result.insertedId.toString(),
       ...newChat,

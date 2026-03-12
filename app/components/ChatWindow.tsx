@@ -3,12 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import MessageBubble from "./MessageBubble";
 
-export default function ChatWindow({
-  chats,
-  setChats,
-  activeChat,
-  setActiveChat,
-}: any) {
+export default function ChatWindow({ chats, setChats, activeChat, setActiveChat, user }: any)
+ {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -67,6 +63,7 @@ export default function ChatWindow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          userId: user?._id,
           title: `Session ${chats.length + 1}`,
           messages: [],
         }),
@@ -108,7 +105,7 @@ export default function ChatWindow({
       })),
     });
 
-    // Update timestamp and persist to localStorage
+  
     updatedChats[activeChat].updatedAt = now;
     setChats([...updatedChats]);
     const chat = updatedChats[activeChat];

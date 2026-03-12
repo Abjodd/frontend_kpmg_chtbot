@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/navbar";
 import Sidebar from "@/app/components/Sidebar";
 import ChatWindow from "@/app/components/ChatWindow";
@@ -9,19 +10,36 @@ export default function ChatPage() {
   const [chats, setChats] = useState<any[]>([]);
   const [activeChat, setActiveChat] = useState(0);
   const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const router = useRouter();
 
-  // Load chats from MongoDB on mount
   useEffect(() => {
-    async function init() {
+    // Get logged-in user from localStorage
+    const stored = localStorage.getItem("user");
+    if (!stored) {
+      router.push("/"); 
+      return;
+    }
+
+    const parsedUser = JSON.parse(stored);
+    setUser(parsedUser);
+
+  
+    async function loadChats() {
       try {
-        const res = await fetch("/api/chats");
+        const res = await fetch(`/api/chats?userId=${parsedUser._id}`);
         const loaded = await res.json();
 
         if (!loaded.length) {
+    
           const createRes = await fetch("/api/chats", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: "Session 1", messages: [] }),
+            body: JSON.stringify({
+              userId: parsedUser._id,
+              title: "Session 1",
+              messages: [],
+            }),
           });
           const first = await createRes.json();
           setChats([first]);
@@ -35,11 +53,10 @@ export default function ChatPage() {
         setReady(true);
       }
     }
-    init();
+
+    loadChats();
   }, []);
 
-  // Plain setChats — Sidebar and ChatWindow handle their own API calls
-  // This just keeps local UI state in sync
   const handleSetChats = (action: any) => {
     setChats((prev) => {
       const next = typeof action === "function" ? action(prev) : action;
@@ -62,12 +79,14 @@ export default function ChatPage() {
           setChats={handleSetChats}
           activeChat={activeChat}
           selectChat={setActiveChat}
+          user={user}
         />
         <ChatWindow
           chats={chats}
           setChats={handleSetChats}
           activeChat={activeChat}
           setActiveChat={setActiveChat}
+          user={user}
         />
       </div>
     </div>

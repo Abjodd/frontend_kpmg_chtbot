@@ -2,19 +2,20 @@
 
 import { useState } from "react";
 
-export default function Sidebar({ chats, setChats, selectChat, activeChat }: any) {
+export default function Sidebar({ chats, setChats, selectChat, activeChat, user }: any) {
   const [open, setOpen] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [search, setSearch] = useState("");
 
-  // ── Create new chat in MongoDB ──
+  
   const handleNewChat = async () => {
     try {
       const res = await fetch("/api/chats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          userId: user?._id,
           title: `Session ${chats.length + 1}`,
           messages: [],
         }),
@@ -28,7 +29,7 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat }: any
     }
   };
 
-  // ── Delete ONE chat by _id (not index) ──
+
   const handleDelete = async (e: React.MouseEvent, chatId: string, index: number) => {
     e.stopPropagation();
     if (confirmDeleteId === chatId) {
@@ -47,7 +48,7 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat }: any
     }
   };
 
-  // ── Clear ALL chats (double-click to confirm) ──
+ 
   const handleClearAll = async () => {
     if (!confirmClearAll) {
       setConfirmClearAll(true);
