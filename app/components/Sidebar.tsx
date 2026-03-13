@@ -8,7 +8,7 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat, user 
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [search, setSearch] = useState("");
 
-  
+  // ── Create new chat in MongoDB ──
   const handleNewChat = async () => {
     try {
       const res = await fetch("/api/chats", {
@@ -16,29 +16,33 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat, user 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user?._id,
-          title: `Session ${chats.length + 1}`,
+          title: 'New Session',
           messages: [],
         }),
       });
       const newChat = await res.json();
-      const updated = [newChat, ...chats];
-      setChats(updated);
+      setChats([newChat]);   // single session — replace all
       selectChat(0);
     } catch (err) {
       console.error("Failed to create chat:", err);
     }
   };
 
-
-  const handleDelete = async (e: React.MouseEvent, chatId: string, index: number) => {
+  // ── Delete ONE chat — since single session, create a fresh one after ──
+  const handleDelete = async (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation();
     if (confirmDeleteId === chatId) {
       try {
-        await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
-        const updated = chats.filter((c: any) => c._id !== chatId);
-        setChats(updated);
+        // Delete old then immediately create a fresh session
+        const res = await fetch("/api/chats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user?._id, title: "New Session", messages: [] }),
+        });
+        const newChat = await res.json();
+        setChats([newChat]);
         setConfirmDeleteId(null);
-        selectChat(Math.max(0, Math.min(activeChat, updated.length - 1)));
+        selectChat(0);
       } catch (err) {
         console.error("Failed to delete chat:", err);
       }
@@ -48,7 +52,7 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat, user 
     }
   };
 
- 
+  // ── Clear ALL chats (double-click to confirm) ──
   const handleClearAll = async () => {
     if (!confirmClearAll) {
       setConfirmClearAll(true);
@@ -57,12 +61,13 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat, user 
     }
     setConfirmClearAll(false);
     try {
-      await Promise.all(
-        chats.map((chat: any) =>
-          chat._id ? fetch(`/api/chats/${chat._id}`, { method: "DELETE" }) : Promise.resolve()
-        )
-      );
-      setChats([]);
+      const res = await fetch("/api/chats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?._id, title: "New Session", messages: [] }),
+      });
+      const newChat = await res.json();
+      setChats([newChat]);
       selectChat(0);
     } catch (err) {
       console.error("Failed to clear chats:", err);
@@ -196,7 +201,7 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat, user 
               <button
                 className={`sb-clear-btn${confirmClearAll ? " armed" : ""}`}
                 onClick={handleClearAll}
-                title={confirmClearAll ? "⚠ Click again to DELETE ALL" : "Clear all history"}
+                title={confirmClearAll ? "⚠ Click again to reset session" : "Reset session"}
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M4 3V2h4v1M5 5v4M7 5v4M3 3l.5 7h5L9 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
@@ -218,7 +223,7 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat, user 
         <div className="sb-mini-count"><span className="sb-mini-badge">{chats.length}</span></div>
 
         <div className="sb-scroll">
-          <div className="sb-group-label">Recent Sessions</div>
+          <div className="sb-group-label">Current Session</div>
           {chats.length === 0 && <div className="sb-empty">No sessions yet</div>}
           {chats.length > 0 && filtered.length === 0 && <div className="sb-no-results">No matches</div>}
 
@@ -244,8 +249,8 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat, user 
                   <div className="sb-item-dot" />
                   <button
                     className={`sb-delete-btn${isConfirming ? " confirm" : ""}`}
-                    onClick={(e) => handleDelete(e, chat._id, realIndex)}
-                    title={isConfirming ? "Click again to confirm delete" : "Delete session"}
+                    onClick={(e) => handleDelete(e, chat._id)}
+                    title={isConfirming ? "Click again to reset session" : "Reset session"}
                   >
                     {isConfirming ? (
                       <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M4 3V2h4v1M5 5v4M7 5v4M3 3l.5 7h5L9 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -263,7 +268,7 @@ export default function Sidebar({ chats, setChats, selectChat, activeChat, user 
         <div className="sb-footer">
           <div className="sb-footer-status">
             <div className="sb-footer-dot" />
-            <div className="sb-footer-text">AI <strong>online</strong> · {chats.length} session{chats.length !== 1 ? "s" : ""} saved</div>
+            <div className="sb-footer-text">AI <strong>online</strong> · {chats.length} session{chats.length !== 1 ? "s" : ""} active</div>
           </div>
         </div>
       </div>
